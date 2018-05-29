@@ -8,7 +8,7 @@ import (
 	"github.com/sohlich/majordomus/iflx"
 )
 
-func apiModule(c *iflx.InfluxClient) http.Handler {
+func dataModule(c *iflx.InfluxClient) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/temp", withClient(c, writeTemp))
 	return http.StripPrefix("/data", mux)
