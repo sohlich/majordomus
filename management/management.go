@@ -134,12 +134,14 @@ type Group interface {
 	GetID() string
 	GetOwnerID() string
 	GetName() string
+	GetDescription() string
 }
 
 type IOTGroup struct {
-	ID      string
-	OwnerID string
-	Name    string
+	ID          string
+	OwnerID     string
+	Name        string
+	Description string
 }
 
 func (g *IOTGroup) GetID() string {
@@ -152,6 +154,10 @@ func (g *IOTGroup) GetOwnerID() string {
 
 func (g *IOTGroup) GetName() string {
 	return g.Name
+}
+
+func (g *IOTGroup) GetDescription() string {
+	return g.Description
 }
 
 type UserStore interface {
@@ -170,8 +176,13 @@ type User interface {
 }
 
 func (ds *mgmtModule) AddGroup(tx *sqlx.Tx, g Group) (Group, error) {
-	insert := "INSERT INTO DEVICE_GROUP(ID,GROUP_NAME,DESCRIPTION) VALUES ($1,$2,$3)"
-	_, err := tx.Exec(insert, g.GetID(), g.GetName(), g.GetOwnerID())
+	insert := "INSERT INTO DEVICE_GROUP(ID,GROUP_NAME,OWNER_ID,DESCRIPTION) VALUES ($1,$2,$3,$4)"
+	_, err := tx.Exec(insert, g.GetID(), g.GetName(), g.GetOwnerID(), g.GetDescription())
+	if err != nil {
+		return nil, err
+	}
+	insert = "INSERT INTO USER_GROUP_MAPPING(ID,GROUP_ID,USER_ID) VALUES ($1,$2,$3)"
+	_, err = tx.Exec(insert, uuid.NewV4().String(), g.GetID(), g.GetOwnerID())
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +190,7 @@ func (ds *mgmtModule) AddGroup(tx *sqlx.Tx, g Group) (Group, error) {
 }
 
 func (ds *mgmtModule) GetGroupsBy(tx *sqlx.Tx, userId string) ([]Group, error) {
-	st := "SELECT ID,GROUP_NAME,DESCRIPTION FROM DEVICE_GROUP DG,USER_GROUP_MAPPING DGM WHERE DG.ID = DGM.GROUP_ID AND DGM.USER_ID = $1"
+	st := "SELECT DG.ID,OWNER_ID as ownerId,GROUP_NAME AS NAME,DESCRIPTION FROM DEVICE_GROUP DG,USER_GROUP_MAPPING DGM WHERE DG.ID = DGM.GROUP_ID AND DGM.USER_ID = $1"
 	rows, err := tx.Queryx(st, userId)
 	if err != nil {
 		return nil, err

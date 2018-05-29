@@ -93,7 +93,8 @@ drop table if exists app_user;
 -- device groups
 create table device_group (
     id text,
-    group_name text,
+	group_name text,
+	owner_id text,
     description text,
     CONSTRAINT PK_DEVICE_GROUP PRIMARY KEY (id)
 );

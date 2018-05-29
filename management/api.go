@@ -25,6 +25,13 @@ func withUserToken(h http.Handler) http.HandlerFunc {
 	}
 }
 
+func generateJwtFrom(u User, jwtSecret string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user": u.GetID(),
+	})
+	return token.SignedString([]byte(jwtSecret))
+}
+
 func (m *mgmtModule) ApiAuthModule() http.Handler {
 	mux := mux.NewRouter()
 	mux.HandleFunc("/register", m.SignUp)
@@ -66,6 +73,7 @@ func (m *mgmtModule) SignIn(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err.Error())
 		http.Error(w, "Cannot read user", 400)
 	}
+	defer r.Body.Close()
 	tx, err := m.Begin()
 	if err != nil {
 		fmt.Println(err.Error())
@@ -99,24 +107,64 @@ func (m *mgmtModule) SignIn(w http.ResponseWriter, r *http.Request) {
 
 func (m *mgmtModule) ApiGroupModule() http.Handler {
 	mux := mux.NewRouter()
-	mux.HandleFunc("/", m.ListGroups)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			m.ListGroupsHandler(w, r)
+		}
+		if r.Method == http.MethodPost {
+			m.AddGroupHandler(w, r)
+		}
+	})
 	return withUserToken(mux)
 }
 
-func (m *mgmtModule) ListGroups(w http.ResponseWriter, r *http.Request) {
+func (m *mgmtModule) ListGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value("user").(string)
+	tx, err := m.Begin()
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+	}
+	groups, err := m.Groups().GetGroupsBy(tx, user)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+	}
+	err = json.NewEncoder(w).Encode(groups)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+	}
+}
+
+func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value("user").(string)
+	group := &IOTGroup{}
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(group)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 400)
+	}
+	defer r.Body.Close()
 
 	tx, err := m.Begin()
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 500)
 	}
-
+	group.ID = uuid.NewV4().String()
+	group.OwnerID = user
+	_, err = m.Groups().AddGroup(tx, group)
+	if err != nil {
+		fmt.Println(err.Error())
+		tx.Rollback()
+		http.Error(w, err.Error(), 500)
+	}
+	tx.Commit()
 }
 
-func generateJwtFrom(u User, jwtSecret string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user": u.GetID(),
-	})
-	return token.SignedString([]byte(jwtSecret))
+func (m *mgmtModule) ApiDeviceModule() http.Handler {
+	mux := mux.NewRouter()
+	return withUserToken(mux)
 }

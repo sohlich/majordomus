@@ -7,6 +7,7 @@ drop if exists ${SCHEMA_NAME}.device;
 create table ${SCHEMA_NAME}.device_group {
     id text not null,
     group_name text,
+    owner_id text,
     description text,
     CONSTRAINT PK_DEVICE_GROUP PRIMARY KEY (id)
 };
