@@ -45,15 +45,18 @@ func (m *mgmtModule) SignUp(w http.ResponseWriter, r *http.Request) {
 	err := dec.Decode(u)
 	if err != nil {
 		http.Error(w, "Cannot read user", 400)
+		return
 	}
 	bytes, err := bcrypt.GenerateFromPassword([]byte(u.GetPassword()), 14)
 	if err != nil {
 		http.Error(w, "Cannot process password", 500)
+		return
 	}
 	u.Password = string(bytes)
 	tx, err := m.Begin()
 	if err != nil {
 		http.Error(w, "Cannot register user", 500)
+		return
 	}
 	u.ID = uuid.NewV4().String()
 	err = m.AddUser(tx, u)
@@ -72,29 +75,35 @@ func (m *mgmtModule) SignIn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, "Cannot read user", 400)
+		return
 	}
 	defer r.Body.Close()
 	tx, err := m.Begin()
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, "Cannot login user", 500)
+		return
 	}
 	dbUser, err := m.GetUserByEmail(tx, u.GetEmail())
 	if err == sql.ErrNoRows {
 		http.Error(w, "Bad login", 401)
+		return
 	}
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, "Cannot login user", 500)
+		return
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(dbUser.GetPassword()), []byte(u.GetPassword()))
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, "Bad login", 401)
+		return
 	}
 	jwt, err := generateJwtFrom(dbUser, m.JwtSecret)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:    "Authentication",
@@ -124,16 +133,19 @@ func (m *mgmtModule) ListGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	groups, err := m.Groups().GetGroupsBy(tx, user)
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	err = json.NewEncoder(w).Encode(groups)
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 500)
+		return
 	}
 }
 
@@ -145,6 +157,7 @@ func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 400)
+		return
 	}
 	defer r.Body.Close()
 
@@ -152,6 +165,7 @@ func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	group.ID = uuid.NewV4().String()
 	group.OwnerID = user
@@ -160,6 +174,7 @@ func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err.Error())
 		tx.Rollback()
 		http.Error(w, err.Error(), 500)
+		return
 	}
 	tx.Commit()
 }
@@ -167,4 +182,36 @@ func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
 func (m *mgmtModule) ApiDeviceModule() http.Handler {
 	mux := mux.NewRouter()
 	return withUserToken(mux)
+}
+
+func (m *mgmtModule) AddDeviceHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value("user").(string)
+	device := &IOTDevice{}
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(device)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	tx, err := m.Begin()
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	g, _ := m.GetGroupBy(tx, user, device.GetGroup())
+	if g == nil {
+		fmt.Println("Group not found")
+		http.Error(w, "Group not found", 404)
+		return
+	}
+
+	if err := m.Devices().AddDevice(tx, device); err != nil {
+		tx.Rollback()
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.WriteHeader(200)
 }

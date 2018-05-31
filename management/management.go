@@ -206,7 +206,16 @@ func (ds *mgmtModule) GetGroupsBy(tx *sqlx.Tx, userId string) ([]Group, error) {
 		lst = append(lst, g)
 	}
 	return lst, nil
+}
 
+func (ds *mgmtModule) GetGroupBy(tx *sqlx.Tx, userId string, groupId string) (Group, error) {
+	st := "SELECT DG.ID,OWNER_ID as ownerId,GROUP_NAME AS NAME,DESCRIPTION FROM DEVICE_GROUP DG,USER_GROUP_MAPPING DGM WHERE DG.ID = DGM.GROUP_ID AND DGM.USER_ID = $1 AND DG.ID = $2"
+	row := tx.QueryRowx(st, userId, groupId)
+	g := &IOTGroup{}
+	if err := row.StructScan(g); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 type AppUser struct {
