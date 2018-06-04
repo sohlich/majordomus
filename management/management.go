@@ -27,6 +27,7 @@ type Module interface {
 	GeneralStore
 	ApiAuthModule() http.Handler
 	ApiGroupModule() http.Handler
+	ApiDeviceModule() http.Handler
 }
 
 func NewGeneralStore(cfg MgmtModuleCfg) Module {
@@ -91,9 +92,9 @@ type DeviceStore interface {
 }
 
 func (m *mgmtModule) AddDevice(tx *sqlx.Tx, d Device) error {
-	i := "INSERT INTO DEVICE(id,name,mac,group_id,create_date) VALUES ($1,$2,$3,$4,$5)"
+	i := "INSERT INTO DEVICE(id,name,mac,ip,group_id,create_date) VALUES ($1,$2,$3,$4,$5)"
 	ID := uuid.NewV4().String()
-	_, err := tx.Exec(i, ID, d.GetName(), d.GetMAC(), d.GetGroup(), time.Now())
+	_, err := tx.Exec(i, ID, d.GetName(), d.GetMAC(), d.GetIP(), d.GetGroup(), time.Now())
 	return err
 }
 
@@ -107,7 +108,7 @@ func (m *mgmtModule) GetDeviceByID(tx *sqlx.Tx, id interface{}) (Device, error) 
 }
 
 func (m *mgmtModule) GetAllByUserID(tx *sqlx.Tx, id interface{}) ([]Device, error) {
-	all_by_user := "SELECT id,name,mac,group_id FROM device d join user_group ug using (group_id) where ug.user_id = $1"
+	all_by_user := "SELECT d.id,name,mac,group_id FROM device d join user_group_mapping ug using (group_id) where ug.user_id = $1"
 	rows, err := tx.Queryx(all_by_user, id)
 	if err != nil {
 		return nil, err
@@ -116,7 +117,7 @@ func (m *mgmtModule) GetAllByUserID(tx *sqlx.Tx, id interface{}) ([]Device, erro
 	lst := []Device{}
 	for rows.Next() {
 		d := &IOTDevice{}
-		err := rows.StructScan(d)
+		err := rows.Scan(&d.ID, &d.Name, &d.Mac, &d.Group)
 		if err != nil {
 			return lst, err
 		}

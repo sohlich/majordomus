@@ -180,8 +180,38 @@ func (m *mgmtModule) AddGroupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mgmtModule) ApiDeviceModule() http.Handler {
-	mux := mux.NewRouter()
-	return withUserToken(mux)
+	mx := mux.NewRouter()
+	mx.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			m.ListDevicesHandler(w, r)
+		case http.MethodPost:
+			m.AddDeviceHandler(w, r)
+		}
+	})
+	return withUserToken(mx)
+}
+
+func (m *mgmtModule) ListDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value("user").(string)
+	tx, err := m.Begin()
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	dLst, err := m.Devices().GetAllByUserID(tx, user)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	err = json.NewEncoder(w).Encode(dLst)
+	if err != nil {
+		fmt.Println(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
 }
 
 func (m *mgmtModule) AddDeviceHandler(w http.ResponseWriter, r *http.Request) {
@@ -214,4 +244,5 @@ func (m *mgmtModule) AddDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(200)
+	tx.Commit()
 }

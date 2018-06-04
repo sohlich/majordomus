@@ -51,5 +51,8 @@ func main() {
 	http.Handle("/group/",
 		jwtMiddleware.Handler(
 			http.StripPrefix("/group", m.ApiGroupModule())))
+	http.Handle("/device/",
+		jwtMiddleware.Handler(
+			http.StripPrefix("/device", m.ApiDeviceModule())))
 	http.ListenAndServe(":8080", nil)
 }
